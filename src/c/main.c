@@ -15,6 +15,13 @@ static Layer *s_main_window_layer;
 // pointer to tick mark layer
 static Layer *s_tick_mark_layer;
 
+// Array to hold info for tick marks
+static int dial_points[60][2];
+static int radius = 0;
+static GRect circle_bounds;
+
+
+
 // courtesy of @robisodd
 int32_t abs32(int32_t a) {return (a^(a>>31)) - (a>>31);}     // returns absolute value of A (only works on 32bit signed)
 
@@ -32,6 +39,75 @@ GPoint getPointOnRect(GRect r, int angle) {
 }
 
 
+static void update_points(){
+
+  // DO ALL THE INTENSIVE CALCULATIONS IN HERE
+  
+  // Get the bounds of the layer we are using
+  GRect tick_layer_bounds = layer_get_unobstructed_bounds(s_tick_mark_layer);
+  
+  // Calculate the radius of the circle we need to draw
+  // For RECT this is the centre of the layer to the corner
+  // For ROUND it is width divided by 2
+  radius = PBL_IF_RECT_ELSE((TRIG_MAX_ANGLE * tick_layer_bounds.size.h/2) / sin_lookup(atan2_lookup(tick_layer_bounds.size.h/2, tick_layer_bounds.size.w/2)), tick_layer_bounds.size.w/2);
+
+  // Calculate the rectangular bounds for our circle
+  // For both this is the center minus the radius
+  circle_bounds = GRect(((tick_layer_bounds.size.w/2)-radius)+tick_layer_bounds.origin.x,
+                                ((tick_layer_bounds.size.h/2)-radius)+tick_layer_bounds.origin.y,
+                                radius*2,
+                                radius*2);
+  
+  // Minutes
+  for (int i=0; i<60; i++){        
+    if (i%5){
+      dial_points[i][0] = DEG_TO_TRIGANGLE((i*6)-MINOR_TICK_WIDTH);  // Start Angle
+      dial_points[i][1] = DEG_TO_TRIGANGLE((i*6)+MINOR_TICK_WIDTH);  // End Angle
+    }
+  }
+  
+  
+  // 5 MINUTES
+  for (int i=0; i<12; i++){        
+    if (i%3){
+      dial_points[i*5][0] = DEG_TO_TRIGANGLE((i*30)-MINOR_TICK_WIDTH);  // Start Angle
+      dial_points[i*5][1] = DEG_TO_TRIGANGLE((i*30)+MINOR_TICK_WIDTH);  // End Angle
+    }
+  }
+  
+  // Hours 12, 3, 6, 9
+  // We will store the X, Y co-ord instead of angles
+  for (int i=0; i<4; i++){
+    
+    switch(i){
+      case 0:
+        // Hour 12
+        dial_points[i*15][0] = (tick_layer_bounds.size.w/2) + tick_layer_bounds.origin.x;  // X co-ord
+        dial_points[i*15][1] = tick_layer_bounds.origin.y;                                 // Y co-ord  
+        break;
+      
+      case 1:
+        // Hour 3
+        dial_points[i*15][0] = tick_layer_bounds.size.w - MAJOR_TICK_LENGTH + tick_layer_bounds.origin.x;  // X co-ord
+        dial_points[i*15][1] = (tick_layer_bounds.size.h/2) + tick_layer_bounds.origin.x;                  // Y co-ord
+        break;
+      
+      case 2:
+        // Hour 6
+        dial_points[i*15][0] = tick_layer_bounds.size.w/2;                                                 // X co-ord
+        dial_points[i*15][1] = tick_layer_bounds.size.h - MAJOR_TICK_LENGTH + tick_layer_bounds.origin.y;  // Y co-ord
+        break;
+      
+      case 3:
+        // Hour 9
+        dial_points[i*15][0] = tick_layer_bounds.origin.x;                                // X co-ord
+        dial_points[i*15][1] = (tick_layer_bounds.size.h/2) + tick_layer_bounds.origin.x; // Y co-ord
+        break;
+    }
+  }
+}
+
+
 static void tick_mark_update_proc(Layer *this_layer, GContext *ctx) {
 
   // Set the colours
@@ -39,30 +115,17 @@ static void tick_mark_update_proc(Layer *this_layer, GContext *ctx) {
   GColor foreground_colour = GColorWhite;
 
   // Get the bounds of the layer we are using
-  GRect tick_layer_bounds = layer_get_bounds(this_layer);
+  GRect tick_layer_bounds = layer_get_unobstructed_bounds(this_layer);
   
   // Fill the screen with the border color using fill_rect as it works on Round and Rect
   draw_dithered_rect(ctx, tick_layer_bounds, background_colour, foreground_colour, DITHER_50_PERCENT);
   
-  // Calculate the radius of the circle we need to draw
-  // For RECT this is the centre of the layer to the corner
-  // For ROUND it is width divided by 2
-  int radius = 0;
-  radius = PBL_IF_RECT_ELSE((TRIG_MAX_ANGLE * tick_layer_bounds.size.h/2) / sin_lookup(atan2_lookup(tick_layer_bounds.size.h/2, tick_layer_bounds.size.w/2)), tick_layer_bounds.size.w/2);
-    
-  // Calculate the rectangular bounds for our circle
-  // For both this is the center minus the radius
-  GRect circle_bounds;
-  circle_bounds = GRect(((tick_layer_bounds.size.w/2)-radius)+tick_layer_bounds.origin.x,
-                                ((tick_layer_bounds.size.h/2)-radius)+tick_layer_bounds.origin.y,
-                                radius*2,
-                                radius*2);
   
   // MINUTES
   for (int i=0; i<60; i++){        
     if (i%5){
       graphics_context_set_fill_color(ctx, foreground_colour);
-      graphics_fill_radial(ctx, circle_bounds, GOvalScaleModeFitCircle, PBL_IF_RECT_ELSE(radius, MINOR_TICK_LENGTH), DEG_TO_TRIGANGLE((i*6)-MINOR_TICK_WIDTH), DEG_TO_TRIGANGLE((i*6)+MINOR_TICK_WIDTH));
+      graphics_fill_radial(ctx, circle_bounds, GOvalScaleModeFitCircle, PBL_IF_RECT_ELSE(radius, MINOR_TICK_LENGTH), dial_points[i][0], dial_points[i][1]);
     }
   }
 
@@ -77,7 +140,7 @@ static void tick_mark_update_proc(Layer *this_layer, GContext *ctx) {
   for (int i=0; i<12; i++){        
     if (i%3){
       graphics_context_set_fill_color(ctx, foreground_colour);
-      graphics_fill_radial(ctx, circle_bounds, GOvalScaleModeFitCircle, PBL_IF_RECT_ELSE(radius, MAJOR_TICK_LENGTH), DEG_TO_TRIGANGLE((i*30)-MINOR_TICK_WIDTH), DEG_TO_TRIGANGLE((i*30)+MINOR_TICK_WIDTH));
+      graphics_fill_radial(ctx, circle_bounds, GOvalScaleModeFitCircle, PBL_IF_RECT_ELSE(radius, MAJOR_TICK_LENGTH), dial_points[i*5][0], dial_points[i*5][1]);      
     }
   }
 
@@ -87,48 +150,18 @@ static void tick_mark_update_proc(Layer *this_layer, GContext *ctx) {
   
   // Hours 12, 3, 6, 9
   for (int i=0; i<4; i++){
-    
-    switch(i){
-      case 0:
-        // Hour 12
-        rect_point.x = (tick_layer_bounds.size.w/2) + tick_layer_bounds.origin.x;
-        rect_point.y = tick_layer_bounds.origin.y;
-        orientation   = 0;
-        break;
-      
-      case 1:
-        // Hour 3
-        rect_point.x = tick_layer_bounds.size.w - MAJOR_TICK_LENGTH + tick_layer_bounds.origin.x;
-        rect_point.y = (tick_layer_bounds.size.h/2) + tick_layer_bounds.origin.x;
-        orientation   = 1;
-        break;
-      
-      case 2:
-        // Hour 6
-        rect_point.x = tick_layer_bounds.size.w/2;
-        rect_point.y = tick_layer_bounds.size.h - MAJOR_TICK_LENGTH + tick_layer_bounds.origin.y;
-        orientation   = 0;
-        break;
-      
-      case 3:
-        // Hour 9
-        rect_point.x = tick_layer_bounds.origin.x;
-        rect_point.y = (tick_layer_bounds.size.h/2) + tick_layer_bounds.origin.x;
-        orientation   = 1;
-        break;
-      
-    }
-    
+        
     // Draw the double ticks using filled rectangles
-    if (orientation == 0){
-      // VERTICAL
-      graphics_fill_rect(ctx, GRect(rect_point.x-MAJOR_TICK_WIDTH-1, rect_point.y, MAJOR_TICK_WIDTH, MAJOR_TICK_LENGTH), 0, GCornerNone);
-      graphics_fill_rect(ctx, GRect(rect_point.x+1, rect_point.y, MAJOR_TICK_WIDTH, MAJOR_TICK_LENGTH), 0, GCornerNone);
+    // Check if number is odd or even to determine horizontal or vertical orientation
+    if (i%2){
+      // HORIZONTAL
+      graphics_fill_rect(ctx, GRect(dial_points[i*15][0], dial_points[i*15][1]-MAJOR_TICK_WIDTH-1, MAJOR_TICK_LENGTH, MAJOR_TICK_WIDTH), 0, GCornerNone);
+      graphics_fill_rect(ctx, GRect(dial_points[i*15][0], dial_points[i*15][1]+1, MAJOR_TICK_LENGTH, MAJOR_TICK_WIDTH), 0, GCornerNone);
     }
     else{
-      // HORIZONTAL
-      graphics_fill_rect(ctx, GRect(rect_point.x, rect_point.y-MAJOR_TICK_WIDTH-1, MAJOR_TICK_LENGTH, MAJOR_TICK_WIDTH), 0, GCornerNone);
-      graphics_fill_rect(ctx, GRect(rect_point.x, rect_point.y+1, MAJOR_TICK_LENGTH, MAJOR_TICK_WIDTH), 0, GCornerNone);
+      // VERTICAL
+      graphics_fill_rect(ctx, GRect(dial_points[i*15][0]-MAJOR_TICK_WIDTH-1, dial_points[i*15][1], MAJOR_TICK_WIDTH, MAJOR_TICK_LENGTH), 0, GCornerNone);
+      graphics_fill_rect(ctx, GRect(dial_points[i*15][0]+1, dial_points[i*15][1], MAJOR_TICK_WIDTH, MAJOR_TICK_LENGTH), 0, GCornerNone);
     }
     
     
@@ -143,6 +176,14 @@ static void tick_mark_update_proc(Layer *this_layer, GContext *ctx) {
     graphics_fill_radial(ctx, grect_inset(tick_layer_bounds, GEdgeInsets(MAJOR_TICK_LENGTH)), GOvalScaleModeFitCircle, radius-MAJOR_TICK_LENGTH, DEG_TO_TRIGANGLE(0), DEG_TO_TRIGANGLE(360));
   #endif
     
+}
+
+
+void prv_unobstructed_change(AnimationProgress progress, void *context) {
+
+  // re-calculate the tick mark points
+  update_points();
+  
 }
 
 
@@ -162,8 +203,15 @@ static void main_window_load(Window *window) {
   // Add the layer to our main window layer
   layer_add_child(s_main_window_layer, s_tick_mark_layer);
  
-  // Tell the watchface layer it needs to redraw
-  //layer_mark_dirty(s_main_window_layer);
+  // Calculate the tick mark points
+  update_points();
+  
+  #if PBL_API_EXISTS(unobstructed_area_service_subscribe)
+      UnobstructedAreaHandlers handlers = {
+    .change = prv_unobstructed_change
+  };
+  unobstructed_area_service_subscribe(handlers, NULL);
+  #endif
     
   
 }

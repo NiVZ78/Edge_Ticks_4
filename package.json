@@ -4,12 +4,9 @@
     "keywords": [],
     "name": "edge-ticks-2",
     "pebble": {
-        "capabilities": [
-            ""
-        ],
         "displayName": "EDGE TICKS 2",
         "enableMultiJS": true,
-        "messageKeys": {},
+        "messageKeys": [],
         "projectType": "native",
         "resources": {
             "media": []
@@ -18,7 +15,8 @@
         "targetPlatforms": [
             "aplite",
             "basalt",
-            "chalk"
+            "chalk",
+            "diorite"
         ],
         "uuid": "4b6334ca-ee4e-4706-81fa-16f0fabca347",
         "watchapp": {
