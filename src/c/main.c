@@ -187,6 +187,18 @@ void prv_unobstructed_change(AnimationProgress progress, void *context) {
 }
 
 
+static void tick_handler(struct tm *tick_time, TimeUnits units_changed) {
+
+  if (units_changed & SECOND_UNIT) 
+  {
+    layer_mark_dirty(s_main_window_layer);
+  }
+  
+}
+
+
+
+
 static void main_window_load(Window *window) {
   
   // get the main window layer
@@ -212,7 +224,9 @@ static void main_window_load(Window *window) {
   };
   unobstructed_area_service_subscribe(handlers, NULL);
   #endif
-    
+  
+  // Subscribe to the seconds tick handler
+  tick_timer_service_subscribe(SECOND_UNIT, tick_handler);
   
 }
 
